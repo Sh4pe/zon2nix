@@ -1,7 +1,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
-const ArrayList = std.ArrayList;
 const ChildProcess = std.process.Child;
 const StringHashMap = std.StringHashMap;
 const mem = std.mem;
@@ -26,9 +25,12 @@ const Worker = struct {
 };
 
 pub fn fetch(alloc: Allocator, deps: *StringHashMap(Dependency)) !void {
-    var workers = try ArrayList(Worker).initCapacity(alloc, deps.count());
+    var workers = try std.array_list.Managed(Worker).initCapacity(alloc, deps.count());
     defer workers.deinit();
     var done = false;
+
+    var threaded: std.Io.Threaded = .init_single_threaded;
+    const io = threaded.io();
 
     while (!done) {
         var iter = deps.valueIterator();
@@ -75,7 +77,10 @@ pub fn fetch(alloc: Allocator, deps: *StringHashMap(Dependency)) !void {
 
             defer alloc.destroy(child);
 
-            const buf = try child.stdout.?.readToEndAlloc(alloc, std.math.maxInt(usize));
+            var staticBuffer: [4096]u8 = undefined;
+
+            var reader = child.stdout.?.reader(io, &staticBuffer);
+            const buf = try reader.interface.readAlloc(alloc, std.math.maxInt(usize));
             defer alloc.free(buf);
 
             log.debug("nix prefetch for \"{s}\" returned: {s}", .{ dep.url, buf });
@@ -88,15 +93,21 @@ pub fn fetch(alloc: Allocator, deps: *StringHashMap(Dependency)) !void {
 
             switch (try child.wait()) {
                 .Exited => |code| if (code != 0) {
-                    log.err("{s} exited with code {}", .{ child.argv, code });
+                    const args = try std.mem.join(alloc, ", ", child.argv);
+                    defer alloc.free(args);
+                    log.err("{{ {s} }} exited with code {}", .{ args, code });
                     return error.NixError;
                 },
                 .Signal => |signal| {
-                    log.err("{s} terminated with signal {}", .{ child.argv, signal });
+                    const args = try std.mem.join(alloc, ", ", child.argv);
+                    defer alloc.free(args);
+                    log.err("{{ {s} }} terminated with signal {}", .{ args, signal });
                     return error.NixError;
                 },
                 .Stopped, .Unknown => {
-                    log.err("{s} finished unsuccessfully", .{child.argv});
+                    const args = try std.mem.join(alloc, ", ", child.argv);
+                    defer alloc.free(args);
+                    log.err("{{ {s} }} finished unsuccessfully", .{args});
                     return error.NixError;
                 },
             }
