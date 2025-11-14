@@ -3,6 +3,7 @@
   stdenv,
   zig,
   nix,
+  forceStatic ? false,
 }:
 stdenv.mkDerivation {
   pname = "zon2nix";
@@ -16,11 +17,11 @@ stdenv.mkDerivation {
 
   zigBuildFlags = [
     "-Dnix=${lib.getExe nix}"
-    "-Dlinkage=${if stdenv.hostPlatform.isStatic then "static" else "dynamic"}"
+    "-Dlinkage=${if forceStatic || stdenv.hostPlatform.isStatic then "static" else "dynamic"}"
   ];
 
   zigCheckFlags = [
     "-Dnix=${lib.getExe nix}"
-    "-Dlinkage=${if stdenv.hostPlatform.isStatic then "static" else "dynamic"}"
+    "-Dlinkage=${if forceStatic || stdenv.hostPlatform.isStatic then "static" else "dynamic"}"
   ];
 }
