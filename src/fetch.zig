@@ -80,7 +80,7 @@ pub fn fetch(alloc: Allocator, deps: *StringHashMap(Dependency)) !void {
             var staticBuffer: [4096]u8 = undefined;
 
             var reader = child.stdout.?.reader(io, &staticBuffer);
-            const buf = try reader.interface.readAlloc(alloc, std.math.maxInt(usize));
+            const buf = try reader.interface.allocRemaining(alloc, .unlimited);
             defer alloc.free(buf);
 
             log.debug("nix prefetch for \"{s}\" returned: {s}", .{ dep.url, buf });
