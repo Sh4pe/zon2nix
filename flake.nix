@@ -52,14 +52,6 @@
           );
         in
         {
-          _module.args.pkgs = import inputs.nixpkgs {
-            inherit system;
-            overlays = [
-              inputs.zig-overlay.overlays.default
-            ];
-            config = { };
-          };
-
           packages = {
             default = callPackage ./nix/package.nix {
               zig = zigpkgs.master.overrideAttrs (
